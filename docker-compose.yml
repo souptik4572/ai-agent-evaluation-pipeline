@@ -1,0 +1,29 @@
+version: "3.8"
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DATABASE_URL=sqlite+aiosqlite:///./eval_pipeline.db
+      - LLM_MODEL=${LLM_MODEL:-claude-sonnet-4-20250514}
+      - LOG_LEVEL=INFO
+    volumes:
+      - db_data:/app
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE_URL=http://api:8000/api/v1
+    depends_on:
+      - api
+
+volumes:
+  db_data:
