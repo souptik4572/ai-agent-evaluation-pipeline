@@ -3,7 +3,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
-from utils import get_conversations, get_conversation, evaluate_conversation
+from utils import get_conversations, get_conversation, evaluate_conversation, get_latest_evaluation_for_conversation
 
 st.set_page_config(page_title="Conversations", layout="wide")
 st.title("Conversations")
@@ -61,6 +61,28 @@ if selected_id:
         meta = conv.get("metadata") or {}
         st.metric("Latency (ms)", meta.get("total_latency_ms", "n/a"))
         st.metric("Mission Completed", str(meta.get("mission_completed", "n/a")))
+
+        st.subheader("Latest Evaluation")
+        latest_eval = get_latest_evaluation_for_conversation(selected_id)
+        if latest_eval:
+            scores = latest_eval.get("scores", {})
+            st.metric("Overall Score", scores.get("overall", "n/a"))
+            cols = st.columns(2)
+            cols[0].metric("Relevance", scores.get("relevance", "n/a"))
+            cols[1].metric("Correctness", scores.get("correctness", "n/a"))
+            cols = st.columns(2)
+            cols[0].metric("Helpfulness", scores.get("helpfulness", "n/a"))
+            cols[1].metric("Safety", scores.get("safety", "n/a"))
+            st.caption(f"Eval ID: {latest_eval.get('evaluation_id')} | {latest_eval.get('created_at', '')}")
+            issues = latest_eval.get("issues_detected") or []
+            if issues:
+                st.warning(f"{len(issues)} issue(s) detected")
+                for issue in issues:
+                    st.write(f"- [{issue.get('severity','?')}] {issue.get('description','')}")
+            else:
+                st.success("No issues detected")
+        else:
+            st.info("No evaluation yet for this conversation.")
 
         if st.button("Evaluate this conversation"):
             with st.spinner("Running evaluation..."):

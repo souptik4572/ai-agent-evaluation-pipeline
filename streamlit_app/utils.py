@@ -55,6 +55,13 @@ def get_evaluation(eval_id: str) -> dict:
     return _get(f"/evaluations/{eval_id}")
 
 
+def get_latest_evaluation_for_conversation(conversation_id: str) -> dict | None:
+    result = _get("/evaluations", params={"conversation_id": conversation_id, "limit": 1})
+    if isinstance(result, dict) and result.get("data"):
+        return result["data"][0]
+    return None
+
+
 def evaluate_conversation(conversation_id: str) -> dict:
     return _post(f"/evaluations/evaluate/{conversation_id}")
 

@@ -185,6 +185,7 @@ async def list_evaluations(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     agent_version: str | None = None,
+    conversation_id: str | None = None,
     min_score: float | None = Query(None, ge=0.0, le=1.0),
     max_score: float | None = Query(None, ge=0.0, le=1.0),
     db: AsyncSession = Depends(get_db),
@@ -192,6 +193,8 @@ async def list_evaluations(
     stmt = select(Evaluation).offset(offset).limit(limit).order_by(Evaluation.created_at.desc())
     if agent_version:
         stmt = stmt.where(Evaluation.agent_version == agent_version)
+    if conversation_id:
+        stmt = stmt.where(Evaluation.conversation_id == conversation_id)
 
     result = await db.execute(stmt)
     evals = result.scalars().all()

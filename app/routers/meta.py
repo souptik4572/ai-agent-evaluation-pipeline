@@ -19,22 +19,26 @@ _drift_detector = DriftDetector()
 
 
 @router.post("/calibrate")
-async def calibrate_evaluator(payload: CalibrationRequest, db: AsyncSession = Depends(get_db)):
+async def calibrate_evaluator(
+    payload: CalibrationRequest,
+    conversation_id: str = Query(..., description="ID of the conversation to calibrate against"),
+    db: AsyncSession = Depends(get_db),
+):
     """Compare human scores against the stored auto-evaluation scores for a conversation."""
     result = await db.execute(
-        select(Evaluation).where(Evaluation.conversation_id == payload.conversation_id)
+        select(Evaluation).where(Evaluation.conversation_id == conversation_id)
         .order_by(Evaluation.created_at.desc())
     )
     ev = result.scalars().first()
     if not ev:
         raise HTTPException(
             status_code=404,
-            detail=f"No evaluation found for conversation '{payload.conversation_id}'.",
+            detail=f"No evaluation found for conversation '{conversation_id}'.",
         )
 
     auto_scores = ev.scores  # dict: {overall, response_quality, tool_accuracy, coherence}
     report = await _calibrator.calibrate(
-        conversation_id=payload.conversation_id,
+        conversation_id=conversation_id,
         human_scores=payload.human_scores,
         auto_scores=auto_scores,
         db=db,

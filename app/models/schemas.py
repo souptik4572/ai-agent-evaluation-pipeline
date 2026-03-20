@@ -108,7 +108,6 @@ class SuggestionStatusUpdate(BaseModel):
 
 
 class CalibrationRequest(BaseModel):
-    conversation_id: str
     human_scores: dict[str, float]
 
 

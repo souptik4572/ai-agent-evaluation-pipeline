@@ -33,20 +33,10 @@ df = pd.DataFrame([
     for e in evaluations if isinstance(e, dict)
 ])
 
-# Score radar/bar overview
-col1, col2 = st.columns(2)
-with col1:
-    fig = px.box(
-        df.melt(value_vars=["overall", "response_quality", "tool_accuracy", "coherence"],
-                var_name="Metric", value_name="Score"),
-        x="Metric", y="Score", title="Score Distribution by Dimension",
-    )
-    st.plotly_chart(fig, use_container_width=True)
-with col2:
-    version_scores = df.groupby("agent_version")["overall"].mean().reset_index()
-    fig2 = px.bar(version_scores, x="agent_version", y="overall",
-                  title="Average Score by Agent Version", color="agent_version")
-    st.plotly_chart(fig2, use_container_width=True)
+version_scores = df.groupby("agent_version")["overall"].mean().reset_index()
+fig2 = px.bar(version_scores, x="agent_version", y="overall",
+              title="Average Score by Agent Version", color="agent_version")
+st.plotly_chart(fig2, use_container_width=True)
 
 st.subheader("All Evaluations")
 st.dataframe(df, use_container_width=True)
