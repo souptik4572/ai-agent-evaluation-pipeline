@@ -4,8 +4,25 @@ An automated pipeline for continuously evaluating and improving multi-turn AI ag
 
 ---
 
+## Live Demo
+
+The project is fully deployed on **Render** and ready to explore without any local setup.
+
+| Service | URL |
+|---------|-----|
+| **Streamlit Dashboard (UI)** | https://ai-agent-evaluation-pipeline-ui.onrender.com |
+| **FastAPI Backend (Swagger Docs)** | https://ai-agent-evaluation-pipeline.onrender.com/docs |
+| **REST API Base URL** | https://ai-agent-evaluation-pipeline.onrender.com/api/v1 |
+
+> **Note on cold starts** — Render's free tier spins services down after 15 minutes of inactivity. If the page takes 20–30 seconds to load on the first visit, that is expected. It will be fast after the initial wake-up.
+
+Both services are backed by a **Render-hosted PostgreSQL database**, so all data persists across deployments and there is no need to re-seed after updates.
+
+---
+
 ## Table of Contents
 
+- [Live Demo](#live-demo)
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [How It Works](#how-it-works)
@@ -66,7 +83,7 @@ This pipeline addresses all of the above. It is designed to be the evaluation ba
 │  └────┬─────┘  └─────┬──────┘  └────────┬─────────┘  │
 │       │              │                   │            │
 │  ┌────▼──────────────▼───────────────────▼─────────┐ │
-│  │              SQLite / PostgreSQL                  │ │
+│  │                    PostgreSQL                       │ │
 │  └──────────────────────────────────────────────────┘ │
 │                                                      │
 │  ┌──────────────┐  ┌─────────────┐  ┌─────────────┐ │
@@ -261,7 +278,7 @@ Agent outputs → Evaluations → Human feedback → Better evaluators → Bette
 | Component | Choice | Reason |
 |-----------|--------|--------|
 | API Framework | FastAPI + Pydantic v2 | Auto-generates OpenAPI docs, async-native, strong request validation |
-| Database | SQLite + SQLAlchemy async | No setup needed locally; switching to Postgres requires changing one env variable |
+| Database | PostgreSQL + SQLAlchemy async | Persistent, production-grade storage. Used both locally (via external Render connection) and in the deployed environment (via Render's internal connection). SQLite is still supported locally for quick offline testing by changing one env variable. |
 | LLM | OpenAI-compatible API (GPT-4.1-mini) | Powers LLM-as-Judge and suggestion generation; graceful fallback if key is absent |
 | Task execution | asyncio.gather | All 4 evaluators are I/O-bound; running them concurrently keeps latency low |
 | UI | Streamlit | Quick to iterate; talks directly to the FastAPI endpoints |
@@ -363,7 +380,9 @@ ai-agent-evaluation-pipeline/
 git clone <repo-url> && cd ai-agent-evaluation-pipeline
 
 cp .env.example .env
-# Open .env and set OPENAI_API_KEY=sk-...
+# Open .env and set:
+#   OPENAI_API_KEY=sk-...
+#   DATABASE_URL=postgresql+asyncpg://<user>:<password>@<host>/<db>
 
 docker-compose up --build
 
@@ -383,7 +402,12 @@ pip install -r requirements.txt
 
 # Copy and configure environment
 cp .env.example .env
-# Set OPENAI_API_KEY in .env
+# Set the following in .env:
+#   OPENAI_API_KEY=sk-...
+#   DATABASE_URL=postgresql+asyncpg://<user>:<password>@<host>/<db>
+#
+# If you do not have a Postgres instance handy, you can use SQLite for local testing:
+#   DATABASE_URL=sqlite+aiosqlite:///./eval_pipeline.db
 
 # Terminal 1 — Start the API server
 uvicorn app.main:app --reload
@@ -410,7 +434,7 @@ Once both services are running:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENAI_API_KEY` | *(empty)* | Required for LLM-as-Judge and suggestion generation. Pipeline works without it but LLM-powered features will be skipped. |
-| `DATABASE_URL` | `sqlite+aiosqlite:///./eval_pipeline.db` | Change to `postgresql+asyncpg://...` to use Postgres |
+| `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL is used in production and recommended locally. For quick offline testing you can switch to `sqlite+aiosqlite:///./eval_pipeline.db` without any other changes. |
 | `LLM_MODEL` | `gpt-4.1-mini` | Any OpenAI-compatible model identifier |
 | `LOG_LEVEL` | `INFO` | Standard Python log levels |
 | `LATENCY_THRESHOLD_MS` | `1000` | Latency above this value triggers a heuristic warning |
@@ -656,7 +680,7 @@ All tests use an in-memory SQLite database so they run without any external setu
 
 ## Demo Walkthrough
 
-After running `docker-compose up` and `python seed_data.py`, here is what you should see across the dashboard pages:
+The live dashboard is available at https://ai-agent-evaluation-pipeline-ui.onrender.com — all demo data is already seeded. If running locally, first run `docker-compose up` and `python seed_data.py`. Here is what you should see across the dashboard pages:
 
 1. **Overview page** — a regression alert banner at the top, a version comparison card showing `v2.3.0 avg 0.91` vs `v2.3.1 avg 0.74` (a drop of ~18.7%), and the eval-to-user-rating correlation around `r ≈ 0.82`
 2. **Alerts page** — two open alerts: the regression detection and an elevated tool failure rate; both can be acknowledged and resolved from here
@@ -680,8 +704,8 @@ Pearson r is computed in NumPy after normalising user ratings to a 0–1 scale. 
 **Structured logging and request tracing**
 Each request is assigned a `uuid4` request ID via `ContextVar`. Every log line emitted during that request — evaluator calls, LLM calls, DB writes — carries the same ID. This makes it straightforward to reconstruct the full trace for a single request by filtering on one field.
 
-**Why SQLite?**
-Removes all infrastructure setup for local development and testing. Switching to Postgres requires changing exactly one environment variable: `DATABASE_URL=postgresql+asyncpg://...`.
+**PostgreSQL as the primary database**
+The deployed environment runs on a Render-hosted PostgreSQL instance. The SQLAlchemy async layer is database-agnostic — switching between Postgres and SQLite requires changing exactly one environment variable (`DATABASE_URL`). SQLite is still used in the test suite (in-memory) and is available as a fallback for quick offline local runs, but PostgreSQL is the default for both local and production use.
 
 **Why asyncio instead of a task queue?**
 All four evaluators are kicked off concurrently with `asyncio.gather`. Since each one is waiting on either an LLM API call or a DB read, the total wall time is roughly equal to the slowest single evaluator rather than the sum of all four. A task queue like Celery would add operational overhead without helping in this case.
@@ -696,7 +720,7 @@ The current setup handles the required ~1,000 conversations/minute target for in
 
 ### 10x Scale (10,000 conversations/minute)
 
-- **Postgres** to replace SQLite — handles concurrent writes properly and supports connection pooling
+- **PostgreSQL is already in place** — handles concurrent writes properly and supports connection pooling; the database layer is ready for this level without changes
 - **Celery + Redis** for the evaluation worker pool — allows evaluation jobs to be distributed across multiple processes without code changes
 - **Read replicas** for the query-heavy dashboard endpoints
 
@@ -712,7 +736,7 @@ The current setup handles the required ~1,000 conversations/minute target for in
 
 ## What I'd Do With More Time
 
-1. **Postgres + Redis** — SQLite works well for a single process but will struggle under concurrent writes. Postgres for the database and Redis-backed Celery for evaluation workers would address that.
+1. **Redis + Celery worker pool** — Postgres is already in place for persistent storage. The next bottleneck for evaluation throughput is the single-process async loop. Adding Redis-backed Celery workers would allow evaluation jobs to be distributed across multiple processes and scale linearly.
 2. **Durable event streaming** — the in-process SSE bus is convenient but does not survive restarts and cannot fan out across multiple processes. Kafka would be the right replacement at scale.
 3. **A/B test integration** — automatically split traffic between agent versions and run significance tests on evaluation scores, rather than relying on manual regression comparisons.
 4. **Prompt versioning** — track which version of the system prompt was active for each agent version, so generated suggestions can be tied to specific lines that need changing.
