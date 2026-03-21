@@ -1,5 +1,4 @@
 import argparse
-import sys
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -16,7 +15,6 @@ def ts(offset_seconds: int = 0) -> str:
     return (NOW + timedelta(seconds=offset_seconds)).isoformat()
 
 
-
 def post(url: str, data) -> dict:
     r = requests.post(url, json=data, timeout=60)
     if not r.ok:
@@ -29,6 +27,7 @@ def get(url: str, params: dict | None = None) -> dict:
     return r.json() if r.ok else {}
 
 
+# ── Conversation builders ───────────────────────────────────────────────────────
 
 def _flight_conv(
     conv_id: str,
@@ -39,7 +38,7 @@ def _flight_conv(
     latency_ms: int = 750,
     ops_notes: str | None = None,
 ) -> dict:
-    """Build a flight-booking conversation."""
+    """Flight booking conversation — success or failure depending on date format."""
     result_body = (
         {"status": "success", "flights": [{"id": "BA112", "price": 599}]}
         if mission_completed
@@ -68,7 +67,8 @@ def _flight_conv(
              "content": (
                  "I've booked flight BA112 for $599. Confirmation: XK-4821."
                  if mission_completed
-                 else "I'm sorry, I encountered an error with the date format. Could you provide dates in YYYY-MM-DD format?"
+                 else "I'm sorry, I encountered an error with the date format. "
+                      "Could you provide dates in YYYY-MM-DD format?"
              ),
              "timestamp": ts(18)},
         ],
@@ -89,8 +89,8 @@ def _flight_conv(
     }
 
 
-def _hotel_conv(conv_id: str, agent_version: str) -> dict:
-    """Baseline hotel booking conversation — high quality."""
+def _hotel_conv(conv_id: str, agent_version: str, user_rating: int = 5, latency_ms: int = 820) -> dict:
+    """Hotel booking conversation — high quality."""
     return {
         "conversation_id": conv_id,
         "agent_version": agent_version,
@@ -113,13 +113,22 @@ def _hotel_conv(conv_id: str, agent_version: str) -> dict:
              "content": "Hotel du Louvre booked for $185/night. Confirmation: HTL-9932.",
              "timestamp": ts(20)},
         ],
-        "feedback": {"user_rating": 5, "ops_review": {"quality": "good"}, "annotations": []},
-        "metadata": {"total_latency_ms": 820, "mission_completed": True},
+        "feedback": {
+            "user_rating": user_rating,
+            "ops_review": {"quality": "good"},
+            "annotations": [{
+                "type": "tool_accuracy",
+                "label": "correct",
+                "annotator_id": "ann_001",
+                "confidence": 0.95,
+            }],
+        },
+        "metadata": {"total_latency_ms": latency_ms, "mission_completed": True},
     }
 
 
-def _car_conv(conv_id: str, agent_version: str) -> dict:
-    """Baseline car rental conversation — high quality."""
+def _car_conv(conv_id: str, agent_version: str, user_rating: int = 4, latency_ms: int = 700) -> dict:
+    """Car rental conversation — high quality."""
     return {
         "conversation_id": conv_id,
         "agent_version": agent_version,
@@ -131,7 +140,8 @@ def _car_conv(conv_id: str, agent_version: str) -> dict:
              "content": "Searching for car rentals in Miami for those dates.",
              "tool_calls": [{
                  "tool_name": "car_rental_search",
-                 "parameters": {"location": "Miami", "pickup_date": "2024-04-05", "return_date": "2024-04-10"},
+                 "parameters": {"location": "Miami", "pickup_date": "2024-04-05",
+                                "return_date": "2024-04-10"},
                  "result": {"status": "success", "cars": [{"model": "Toyota Camry", "price_per_day": 65}]},
                  "latency_ms": 210,
              }],
@@ -141,13 +151,22 @@ def _car_conv(conv_id: str, agent_version: str) -> dict:
              "content": "Toyota Camry booked at $65/day. Confirmation: CAR-5571.",
              "timestamp": ts(17)},
         ],
-        "feedback": {"user_rating": 4, "ops_review": {"quality": "good"}, "annotations": []},
-        "metadata": {"total_latency_ms": 700, "mission_completed": True},
+        "feedback": {
+            "user_rating": user_rating,
+            "ops_review": {"quality": "good"},
+            "annotations": [{
+                "type": "tool_accuracy",
+                "label": "correct",
+                "annotator_id": "ann_001",
+                "confidence": 0.90,
+            }],
+        },
+        "metadata": {"total_latency_ms": latency_ms, "mission_completed": True},
     }
 
 
-def _context_loss_conv(conv_id: str, forget_prefs: bool) -> dict:
-    """Long conversation that either retains or forgets user preferences."""
+def _context_loss_conv(conv_id: str, agent_version: str, forget_prefs: bool) -> dict:
+    """Long multi-turn conversation that either retains or forgets user preferences."""
     prefs_msg = "I prefer window seats and my budget is under $400. I must depart after 6pm."
     remembered = "Found a window seat flight departing at 7:30pm for $385 — within your $400 budget!"
     forgotten = "Here are some flights. Flight AA202 departs at 8am and costs $520."
@@ -163,11 +182,9 @@ def _context_loss_conv(conv_id: str, forget_prefs: bool) -> dict:
                          "result": {"status": "success", "flights": []}, "latency_ms": 300}],
          "timestamp": ts(5)},
         {"turn_id": 3, "role": "user", "content": "What about a direct flight?", "timestamp": ts(15)},
-        {"turn_id": 4, "role": "assistant", "content": "Searching for direct flights now.",
-         "timestamp": ts(20)},
+        {"turn_id": 4, "role": "assistant", "content": "Searching for direct flights now.", "timestamp": ts(20)},
         {"turn_id": 5, "role": "user", "content": "And can you check for upgrades?", "timestamp": ts(30)},
-        {"turn_id": 6, "role": "assistant", "content": "Let me check upgrade availability.",
-         "timestamp": ts(35)},
+        {"turn_id": 6, "role": "assistant", "content": "Let me check upgrade availability.", "timestamp": ts(35)},
         {"turn_id": 7, "role": "user", "content": "OK, what's the best option you found?", "timestamp": ts(50)},
         {"turn_id": 8, "role": "assistant",
          "content": forgotten if forget_prefs else remembered,
@@ -176,21 +193,30 @@ def _context_loss_conv(conv_id: str, forget_prefs: bool) -> dict:
 
     return {
         "conversation_id": conv_id,
-        "agent_version": "v2.3.1",
+        "agent_version": agent_version,
         "turns": turns,
         "feedback": {
-            "user_rating": 2 if forget_prefs else 4,
-            "ops_review": {"quality": "poor" if forget_prefs else "good",
-                           "notes": "Agent forgot stated preferences" if forget_prefs else None},
-            "annotations": [{"type": "coherence", "label": "poor" if forget_prefs else "good",
-                              "annotator_id": "ann_002", "confidence": 0.88}],
+            "user_rating": 2 if forget_prefs else 5,
+            "ops_review": {
+                "quality": "poor" if forget_prefs else "good",
+                "notes": "Agent forgot stated preferences" if forget_prefs else None,
+            },
+            "annotations": [{
+                "type": "coherence",
+                "label": "poor" if forget_prefs else "good",
+                "annotator_id": "ann_002",
+                "confidence": 0.88,
+            }],
         },
-        "metadata": {"total_latency_ms": 1100 if forget_prefs else 850,
-                     "mission_completed": not forget_prefs},
+        "metadata": {
+            "total_latency_ms": 1100 if forget_prefs else 780,
+            "mission_completed": not forget_prefs,
+        },
     }
 
 
-def _annotator_disagreement_conv(conv_id: str, agree: bool) -> dict:
+def _annotator_disagreement_conv(conv_id: str, agent_version: str, agree: bool) -> dict:
+    """Travel insurance recommendation — annotators agree or disagree on quality."""
     annotations = (
         [{"type": "response_quality", "label": "good", "annotator_id": f"ann_{100+i}", "confidence": 0.9}
          for i in range(3)]
@@ -203,10 +229,11 @@ def _annotator_disagreement_conv(conv_id: str, agree: bool) -> dict:
     )
     return {
         "conversation_id": conv_id,
-        "agent_version": "v2.3.1",
+        "agent_version": agent_version,
         "turns": [
             {"turn_id": 1, "role": "user",
-             "content": "Can you recommend travel insurance for my trip to Japan?", "timestamp": ts(0)},
+             "content": "Can you recommend travel insurance for my trip to Japan?",
+             "timestamp": ts(0)},
             {"turn_id": 2, "role": "assistant",
              "content": "For Japan travel, I'd recommend comprehensive coverage including medical evacuation. "
                         "Plans typically range from $50-150 for a two-week trip.",
@@ -221,62 +248,94 @@ def _annotator_disagreement_conv(conv_id: str, agree: bool) -> dict:
     }
 
 
+# ── v2.3.0 — Baseline (high quality) ───────────────────────────────────────────
 
 baseline_convs: list[dict] = []
 for i in range(5):
     baseline_convs.append(_flight_conv(
         f"conv_v230_flight_{i+1:02d}", "v2.3.0",
         date_range=f"2024-06-{10+i:02d}/2024-06-{17+i:02d}",
-        user_rating=5, mission_completed=True,
+        user_rating=5, mission_completed=True, latency_ms=680,
     ))
 for i in range(5):
-    baseline_convs.append(_hotel_conv(f"conv_v230_hotel_{i+1:02d}", "v2.3.0"))
+    baseline_convs.append(_hotel_conv(f"conv_v230_hotel_{i+1:02d}", "v2.3.0", user_rating=5))
 for i in range(5):
-    baseline_convs.append(_car_conv(f"conv_v230_car_{i+1:02d}", "v2.3.0"))
+    baseline_convs.append(_car_conv(f"conv_v230_car_{i+1:02d}", "v2.3.0", user_rating=4))
+
+
+# ── v2.3.1 — Regression (accuracy drops sharply) ───────────────────────────────
+# Prompt update introduced ambiguous date handling — 15 bad conversations.
 
 BAD_DATES = ["next Monday", "Jan 22-28", "1/22/2024", "next week", "Monday to Friday"]
-regression_convs: list[dict] = []
+v231_flight_convs: list[dict] = []
 for i, bad_date in enumerate(BAD_DATES):
-    regression_convs.append(_flight_conv(
-        f"conv_v231_regression_{i+1:02d}", "v2.3.1",
+    v231_flight_convs.append(_flight_conv(
+        f"conv_v231_flight_{i+1:02d}", "v2.3.1",
         date_range=bad_date,
         user_rating=1, mission_completed=False, latency_ms=1400,
         ops_notes="poor - wrong date format caused tool failure",
     ))
 
-context_convs: list[dict] = []
+v231_context_convs: list[dict] = []
 for i in range(5):
-    context_convs.append(_context_loss_conv(f"conv_v231_context_{i+1:02d}", forget_prefs=True))
+    v231_context_convs.append(_context_loss_conv(
+        f"conv_v231_context_{i+1:02d}", "v2.3.1", forget_prefs=True,
+    ))
 
-disagree_convs: list[dict] = []
+v231_disagree_convs: list[dict] = []
 for i in range(5):
-    disagree_convs.append(_annotator_disagreement_conv(f"conv_v231_disagree_{i+1:02d}", agree=False))
+    v231_disagree_convs.append(_annotator_disagreement_conv(
+        f"conv_v231_disagree_{i+1:02d}", "v2.3.1", agree=False,
+    ))
 
-post_update_convs = regression_convs + context_convs + disagree_convs
+regression_convs = v231_flight_convs + v231_context_convs + v231_disagree_convs
 
-all_conversations = baseline_convs + post_update_convs
 
+# ── v2.3.2 — Recovery (accuracy recovers strongly) ─────────────────────────────
+# Date format bug fixed in prompt. Context window handling improved.
+# All tool calls succeed; user ratings are back to 5.
+
+recovery_convs: list[dict] = []
+for i in range(5):
+    recovery_convs.append(_flight_conv(
+        f"conv_v232_flight_{i+1:02d}", "v2.3.2",
+        date_range=f"2024-07-{10+i:02d}/2024-07-{17+i:02d}",
+        user_rating=5, mission_completed=True, latency_ms=380,
+        ops_notes="excellent - date format fix confirmed working",
+    ))
+for i in range(5):
+    recovery_convs.append(_hotel_conv(
+        f"conv_v232_hotel_{i+1:02d}", "v2.3.2", user_rating=5, latency_ms=410,
+    ))
+for i in range(5):
+    recovery_convs.append(_context_loss_conv(
+        f"conv_v232_context_{i+1:02d}", "v2.3.2", forget_prefs=False,
+    ))
+
+
+# ── Execution ───────────────────────────────────────────────────────────────────
 
 print(f"\n{'='*65}")
 print(f"  AI Agent Evaluation Pipeline — Demo Seed")
 print(f"  API: {API}")
 print(f"{'='*65}")
 
+# ── STEP 1: Seed v2.3.0 ────────────────────────────────────────────────────────
 print(f"\nSTEP 1: Seeding {len(baseline_convs)} baseline conversations (v2.3.0)...")
 baseline_ids = []
 for conv in baseline_convs:
     result = post(f"{API}/conversations", conv)
     cid = result.get("conversation_id", conv["conversation_id"])
     baseline_ids.append(cid)
-print(f"  ✓ Ingested {len(baseline_ids)} baseline conversations")
+print(f"  ✓ Ingested {len(baseline_ids)} conversations")
 
-print(f"\nSTEP 2: Evaluating {len(baseline_ids)} baseline conversations...")
+# ── STEP 2: Evaluate v2.3.0 ───────────────────────────────────────────────────
+print(f"\nSTEP 2: Evaluating {len(baseline_ids)} baseline conversations (v2.3.0)...")
 r = requests.post(f"{API}/evaluations/evaluate/batch", json=baseline_ids, timeout=180)
 if r.ok:
-    result = r.json()
-    print(f"  ✓ Evaluated {result.get('evaluated', 0)} conversations")
+    print(f"  ✓ Evaluated {r.json().get('evaluated', 0)} conversations")
 else:
-    print(f"  ⚠  Batch eval error: {r.status_code} — falling back to individual evals")
+    print(f"  ⚠  Batch eval failed ({r.status_code}) — falling back to individual evals")
     for cid in baseline_ids:
         requests.post(f"{API}/evaluations/evaluate/{cid}", timeout=60)
 
@@ -285,22 +344,26 @@ v230_scores = [e["scores"]["overall"] for e in evals_v230.get("data", []) if "sc
 v230_mean = sum(v230_scores) / len(v230_scores) if v230_scores else 0.0
 print(f"  → v2.3.0 mean overall score: {v230_mean:.3f}")
 
-print(f"\nSTEP 3: Seeding {len(post_update_convs)} post-update conversations (v2.3.1)...")
-post_update_ids = []
-for conv in post_update_convs:
+# ── STEP 3: Seed v2.3.1 ────────────────────────────────────────────────────────
+print(f"\nSTEP 3: Seeding {len(regression_convs)} regression conversations (v2.3.1)...")
+regression_ids = []
+for conv in regression_convs:
     result = post(f"{API}/conversations", conv)
     cid = result.get("conversation_id", conv["conversation_id"])
-    post_update_ids.append(cid)
-print(f"  ✓ Ingested {len(post_update_ids)} post-update conversations")
+    regression_ids.append(cid)
+print(f"  ✓ Ingested {len(regression_ids)} conversations")
+print(f"    ├─ {len(v231_flight_convs)} with tool date-format regression")
+print(f"    ├─ {len(v231_context_convs)} with context-loss (long conversations)")
+print(f"    └─ {len(v231_disagree_convs)} with annotator disagreement")
 
-print(f"\nSTEP 4: Evaluating {len(post_update_ids)} post-update conversations...")
-r = requests.post(f"{API}/evaluations/evaluate/batch", json=post_update_ids, timeout=180)
+# ── STEP 4: Evaluate v2.3.1 ───────────────────────────────────────────────────
+print(f"\nSTEP 4: Evaluating {len(regression_ids)} regression conversations (v2.3.1)...")
+r = requests.post(f"{API}/evaluations/evaluate/batch", json=regression_ids, timeout=180)
 if r.ok:
-    result = r.json()
-    print(f"  ✓ Evaluated {result.get('evaluated', 0)} conversations")
+    print(f"  ✓ Evaluated {r.json().get('evaluated', 0)} conversations")
 else:
-    print(f"  ⚠  Batch eval error: {r.status_code} — falling back to individual evals")
-    for cid in post_update_ids:
+    print(f"  ⚠  Batch eval failed ({r.status_code}) — falling back to individual evals")
+    for cid in regression_ids:
         requests.post(f"{API}/evaluations/evaluate/{cid}", timeout=60)
 
 evals_v231 = get(f"{API}/evaluations", {"agent_version": "v2.3.1", "limit": 30})
@@ -308,7 +371,8 @@ v231_scores = [e["scores"]["overall"] for e in evals_v231.get("data", []) if "sc
 v231_mean = sum(v231_scores) / len(v231_scores) if v231_scores else 0.0
 print(f"  → v2.3.1 mean overall score: {v231_mean:.3f}")
 
-print(f"\nSTEP 5: Running regression comparison (v2.3.0 vs v2.3.1)...")
+# ── STEP 5: Regression check v2.3.0 vs v2.3.1 ─────────────────────────────────
+print(f"\nSTEP 5: Regression comparison (v2.3.0 → v2.3.1)...")
 reg_result = post(f"{API}/regression/compare", {
     "baseline_version": "v2.3.0",
     "target_version": "v2.3.1",
@@ -316,7 +380,6 @@ reg_result = post(f"{API}/regression/compare", {
 if reg_result:
     is_reg = reg_result.get("is_regression", False)
     severity = reg_result.get("severity", "none")
-    summary = reg_result.get("summary", "")
     regressions = reg_result.get("regressions_detected", [])
     print(f"  {'⚠  REGRESSION DETECTED' if is_reg else '✓ No regression'}: severity={severity}")
     print(f"  Affected dimensions: {regressions}")
@@ -324,11 +387,56 @@ if reg_result:
         for dim, data in reg_result["dimensions"].items():
             delta_pct = data.get("delta_pct", 0)
             arrow = "↓" if delta_pct < 0 else "↑"
-            print(f"    {dim}: {data.get('baseline_mean', 0):.3f} → {data.get('target_mean', 0):.3f} ({arrow}{abs(delta_pct):.1f}%)")
+            print(f"    {dim}: {data.get('baseline_mean', 0):.3f} → "
+                  f"{data.get('target_mean', 0):.3f} ({arrow}{abs(delta_pct):.1f}%)")
 else:
     print("  ⚠  Regression compare failed (not enough data?)")
 
-print(f"\nSTEP 6: Generating improvement suggestions...")
+# ── STEP 6: Seed v2.3.2 ────────────────────────────────────────────────────────
+print(f"\nSTEP 6: Seeding {len(recovery_convs)} recovery conversations (v2.3.2)...")
+recovery_ids = []
+for conv in recovery_convs:
+    result = post(f"{API}/conversations", conv)
+    cid = result.get("conversation_id", conv["conversation_id"])
+    recovery_ids.append(cid)
+print(f"  ✓ Ingested {len(recovery_ids)} conversations")
+
+# ── STEP 7: Evaluate v2.3.2 ───────────────────────────────────────────────────
+print(f"\nSTEP 7: Evaluating {len(recovery_ids)} recovery conversations (v2.3.2)...")
+r = requests.post(f"{API}/evaluations/evaluate/batch", json=recovery_ids, timeout=180)
+if r.ok:
+    print(f"  ✓ Evaluated {r.json().get('evaluated', 0)} conversations")
+else:
+    print(f"  ⚠  Batch eval failed ({r.status_code}) — falling back to individual evals")
+    for cid in recovery_ids:
+        requests.post(f"{API}/evaluations/evaluate/{cid}", timeout=60)
+
+evals_v232 = get(f"{API}/evaluations", {"agent_version": "v2.3.2", "limit": 30})
+v232_scores = [e["scores"]["overall"] for e in evals_v232.get("data", []) if "scores" in e]
+v232_mean = sum(v232_scores) / len(v232_scores) if v232_scores else 0.0
+print(f"  → v2.3.2 mean overall score: {v232_mean:.3f}")
+
+# ── STEP 8: Recovery check v2.3.1 vs v2.3.2 ───────────────────────────────────
+print(f"\nSTEP 8: Regression comparison (v2.3.1 → v2.3.2)...")
+rec_result = post(f"{API}/regression/compare", {
+    "baseline_version": "v2.3.1",
+    "target_version": "v2.3.2",
+})
+if rec_result:
+    is_reg = rec_result.get("is_regression", False)
+    severity = rec_result.get("severity", "none")
+    print(f"  {'⚠  Still a regression' if is_reg else '✓ Recovery confirmed'}: severity={severity}")
+    if "dimensions" in rec_result:
+        for dim, data in rec_result["dimensions"].items():
+            delta_pct = data.get("delta_pct", 0)
+            arrow = "↓" if delta_pct < 0 else "↑"
+            print(f"    {dim}: {data.get('baseline_mean', 0):.3f} → "
+                  f"{data.get('target_mean', 0):.3f} ({arrow}{abs(delta_pct):.1f}%)")
+else:
+    print("  ⚠  Recovery compare failed (not enough data?)")
+
+# ── STEP 9: Generate improvement suggestions ───────────────────────────────────
+print(f"\nSTEP 9: Generating improvement suggestions...")
 r = requests.post(f"{API}/suggestions/generate?last_n=50", timeout=300)
 suggestions_generated = 0
 if r.ok:
@@ -347,49 +455,66 @@ if r.ok:
 else:
     print(f"  ⚠  Suggestion generation error: {r.status_code}")
 
-print(f"\nSTEP 7: Seeding meta-evaluation calibration data...")
+# ── STEP 10: Seed meta-evaluation calibration data ────────────────────────────
+print(f"\nSTEP 10: Seeding meta-evaluation calibration data...")
 calib_count = 0
+# v2.3.0 baselines — high human scores
 for cid in baseline_ids[:5]:
     r = requests.post(f"{API}/meta/calibrate", json={
         "conversation_id": cid,
-        "human_scores": {"overall": 0.90, "response_quality": 0.88, "tool_accuracy": 0.95, "coherence": 0.92},
+        "human_scores": {"overall": 0.90, "response_quality": 0.88,
+                         "tool_accuracy": 0.95, "coherence": 0.92},
     }, timeout=30)
     if r.ok:
         calib_count += 1
 
-for cid in post_update_ids[:5]:
+# v2.3.1 regressions — low human scores
+for cid in regression_ids[:5]:
     r = requests.post(f"{API}/meta/calibrate", json={
         "conversation_id": cid,
-        "human_scores": {"overall": 0.55, "response_quality": 0.60, "tool_accuracy": 0.40, "coherence": 0.58},
+        "human_scores": {"overall": 0.45, "response_quality": 0.50,
+                         "tool_accuracy": 0.30, "coherence": 0.48},
+    }, timeout=30)
+    if r.ok:
+        calib_count += 1
+
+# v2.3.2 recovery — high human scores, better than baseline
+for cid in recovery_ids[:5]:
+    r = requests.post(f"{API}/meta/calibrate", json={
+        "conversation_id": cid,
+        "human_scores": {"overall": 0.95, "response_quality": 0.94,
+                         "tool_accuracy": 0.98, "coherence": 0.96},
     }, timeout=30)
     if r.ok:
         calib_count += 1
 
 print(f"  ✓ Created {calib_count} calibration records")
 
+# ── Summary ─────────────────────────────────────────────────────────────────────
 alerts_summary = get(f"{API}/alerts/summary")
 open_alerts = alerts_summary.get("total_open", 0)
 by_severity = alerts_summary.get("by_severity", {})
 
-score_delta = v231_mean - v230_mean
-score_delta_pct = (score_delta / v230_mean * 100) if v230_mean > 0 else 0
+all_conversations = baseline_convs + regression_convs + recovery_convs
+
+delta_230_231 = ((v231_mean - v230_mean) / v230_mean * 100) if v230_mean > 0 else 0
+delta_231_232 = ((v232_mean - v231_mean) / v231_mean * 100) if v231_mean > 0 else 0
 
 print(f"\n{'='*65}")
 print(f"  SEED COMPLETE")
 print(f"{'='*65}")
-print(f"  Seeded {len(all_conversations)} conversations")
-print(f"    ├─ {len(baseline_convs)} baseline (v2.3.0)")
-print(f"    └─ {len(post_update_convs)} post-update (v2.3.1)")
-print(f"       ├─ {len(regression_convs)} with tool date-format regression")
-print(f"       ├─ {len(context_convs)} with context-loss (long conversations)")
-print(f"       └─ {len(disagree_convs)} with annotator disagreement")
+print(f"  Seeded {len(all_conversations)} conversations across 3 versions:")
+print(f"    ├─ {len(baseline_convs):2d}  v2.3.0  baseline   (score: {v230_mean:.3f})")
+print(f"    ├─ {len(regression_convs):2d}  v2.3.1  regression (score: {v231_mean:.3f}  {delta_230_231:+.1f}%)")
+print(f"    └─ {len(recovery_convs):2d}  v2.3.2  recovery   (score: {v232_mean:.3f}  {delta_231_232:+.1f}%)")
 print(f"")
-print(f"  Evaluation scores:")
-print(f"    v2.3.0 avg: {v230_mean:.3f}")
-print(f"    v2.3.1 avg: {v231_mean:.3f}  ({score_delta_pct:+.1f}%)")
+print(f"  v2.3.1 breakdown:")
+print(f"    ├─ {len(v231_flight_convs)} with tool date-format regression")
+print(f"    ├─ {len(v231_context_convs)} with context-loss across long turns")
+print(f"    └─ {len(v231_disagree_convs)} with annotator disagreement")
 print(f"")
-print(f"  Suggestions generated: {suggestions_generated}")
-print(f"  Open alerts: {open_alerts}  {by_severity}")
+print(f"  Suggestions generated : {suggestions_generated}")
+print(f"  Open alerts           : {open_alerts}  {by_severity}")
 print(f"")
 print(f"  Ready for demo:")
 print(f"    API docs   → {args.base_url}/docs")
