@@ -3,10 +3,11 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
-from utils import get_conversations, get_conversation, evaluate_conversation, get_latest_evaluation_for_conversation
+from utils import get_conversations, get_conversation, evaluate_conversation, get_latest_evaluation_for_conversation, render_api_docs_button
 
 st.set_page_config(page_title="Conversations", layout="wide")
 st.title("Conversations")
+render_api_docs_button()
 
 # List
 conv_data = get_conversations(limit=100)

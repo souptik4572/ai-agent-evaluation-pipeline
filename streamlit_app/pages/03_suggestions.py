@@ -5,10 +5,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from utils import get_suggestions, update_suggestion_status, generate_suggestions, get_suggestions_summary
+from utils import get_suggestions, update_suggestion_status, generate_suggestions, get_suggestions_summary, render_api_docs_button
 
 st.set_page_config(page_title="Suggestions", layout="wide")
 st.title("Improvement Suggestions")
+render_api_docs_button()
 
 # ── Actions ────────────────────────────────────────────────────────────────────
 col_gen, col_filt1, col_filt2 = st.columns([2, 2, 2])
@@ -47,7 +48,7 @@ if by_status:
 st.divider()
 
 # ── Suggestion list ────────────────────────────────────────────────────────────
-sugg_data = get_suggestions(status=status, type=stype, limit=200)
+sugg_data = get_suggestions(status=status, suggestion_type=stype, limit=200)
 suggestions = sugg_data.get("data", []) if isinstance(sugg_data, dict) else []
 
 if not suggestions:

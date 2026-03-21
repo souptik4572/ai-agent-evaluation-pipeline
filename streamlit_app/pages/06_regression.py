@@ -11,10 +11,12 @@ from utils import (
     compare_versions,
     auto_check_version,
     get_regression_reports,
+    render_api_docs_button,
 )
 
 st.set_page_config(page_title="Regression Analysis", layout="wide")
 st.title("Version-Over-Version Regression Analysis")
+render_api_docs_button()
 
 # ── Version timeline ───────────────────────────────────────────────────────────
 versions = get_regression_versions()

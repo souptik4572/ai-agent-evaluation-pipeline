@@ -4,10 +4,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
 import pandas as pd
-from utils import get_alerts, get_alert_summary, update_alert_status
+from utils import get_alerts, get_alert_summary, update_alert_status, render_api_docs_button
 
 st.set_page_config(page_title="Alerts", layout="wide")
 st.title("Alerts")
+render_api_docs_button()
 
 # ── Summary metrics ────────────────────────────────────────────────────────────
 summary = get_alert_summary()
@@ -39,7 +40,7 @@ status_val = None if status_filter == "all" else status_filter
 type_val = None if type_filter == "all" else type_filter
 severity_val = None if severity_filter == "all" else severity_filter
 
-alerts = get_alerts(status=status_val, type=type_val, severity=severity_val, limit=100)
+alerts = get_alerts(status=status_val, alert_type=type_val, severity=severity_val, limit=100)
 
 if not alerts:
     st.info("No alerts match the current filters.")

@@ -5,10 +5,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from utils import get_evaluations, get_evaluation
+from utils import get_evaluations, get_evaluation, render_api_docs_button
 
 st.set_page_config(page_title="Evaluations", layout="wide")
 st.title("Evaluations")
+render_api_docs_button()
 
 min_score = st.slider("Filter by minimum score", 0.0, 1.0, 0.0, 0.05)
 evals_data = get_evaluations(limit=200, min_score=min_score if min_score > 0 else None)

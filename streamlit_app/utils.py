@@ -1,9 +1,22 @@
 import os
 
 import requests
+import streamlit as st
 
 API_BASE = os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
 TIMEOUT = 15
+
+# Root URL of the backend (strips /api/v1 suffix if present)
+_API_ROOT = API_BASE.rstrip("/")
+if _API_ROOT.endswith("/api/v1"):
+    _API_ROOT = _API_ROOT[: -len("/api/v1")]
+DOCS_URL = f"{_API_ROOT}/docs"
+
+
+def render_api_docs_button() -> None:
+    """Render a sidebar button that opens the Swagger API docs in a new tab."""
+    st.sidebar.markdown("---")
+    st.sidebar.link_button("📄 API Docs (Swagger)", DOCS_URL, use_container_width=True)
 
 
 def _get(path: str, params: dict | None = None) -> dict | list:
@@ -66,12 +79,12 @@ def evaluate_conversation(conversation_id: str) -> dict:
     return _post(f"/evaluations/evaluate/{conversation_id}")
 
 
-def get_suggestions(status: str | None = None, type: str | None = None, limit: int = 100) -> dict:
+def get_suggestions(status: str | None = None, suggestion_type: str | None = None, limit: int = 100) -> dict:
     params: dict = {"limit": limit}
     if status:
         params["status"] = status
-    if type:
-        params["type"] = type
+    if suggestion_type:
+        params["type"] = suggestion_type
     return _get("/suggestions", params)
 
 
@@ -101,13 +114,13 @@ def get_meta_correlation() -> dict:
 
 # ── Alerts ─────────────────────────────────────────────────────────────────────
 
-def get_alerts(status: str | None = None, type: str | None = None,
+def get_alerts(status: str | None = None, alert_type: str | None = None,
                severity: str | None = None, limit: int = 100) -> list:
     params: dict = {"limit": limit}
     if status:
         params["status"] = status
-    if type:
-        params["type"] = type
+    if alert_type:
+        params["type"] = alert_type
     if severity:
         params["severity"] = severity
     result = _get("/alerts", params)
@@ -155,7 +168,7 @@ def get_metrics() -> dict:
 
 def health_check() -> dict:
     try:
-        r = requests.get(f"{API_BASE.replace('/api/v1', '')}/health", timeout=5)
+        r = requests.get(f"{_API_ROOT}/health", timeout=5)
         return r.json()
     except Exception as e:
         return {"status": "unreachable", "error": str(e)}

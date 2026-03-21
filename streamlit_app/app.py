@@ -12,6 +12,7 @@ from utils import (
     get_meta_correlation,
     get_metrics,
     health_check,
+    render_api_docs_button,
 )
 
 st.set_page_config(
@@ -21,6 +22,7 @@ st.set_page_config(
 )
 
 st.title("AI Agent Evaluation Pipeline")
+render_api_docs_button()
 
 # ── Health check banner ────────────────────────────────────────────────────────
 health = health_check()

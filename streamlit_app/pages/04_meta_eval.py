@@ -7,10 +7,11 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from utils import get_meta_drift, get_meta_calibration, get_meta_correlation
+from utils import get_meta_drift, get_meta_calibration, get_meta_correlation, render_api_docs_button
 
 st.set_page_config(page_title="Meta-Evaluation", layout="wide")
 st.title("Meta-Evaluation")
+render_api_docs_button()
 
 # ── Eval-to-User-Rating Correlation ───────────────────────────────────────────
 st.header("Eval Score ↔ User Rating Correlation")
